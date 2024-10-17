@@ -19,7 +19,7 @@
   "listeners": ["zkBroker", "broker"],
   "name": "ConsumerGroupHeartbeatRequest",
   // Version 1 adds SubscribedTopicRegex (KIP-848).
-  "validVersions": "0-1",
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "latestVersionUnstable": true,
   "fields": [
