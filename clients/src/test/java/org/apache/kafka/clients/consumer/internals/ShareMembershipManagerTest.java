@@ -244,7 +244,7 @@ public class ShareMembershipManagerTest {
         membershipManager.leaveGroup();
         verify(subscriptionState).unsubscribe();
         assertEquals(MemberState.LEAVING, membershipManager.state());
-        verify(listener).onMemberEpochUpdated(Optional.empty(), Optional.empty());
+        verify(listener).onMemberEpochUpdated(Optional.empty(), Optional.of(membershipManager.memberId));
     }
 
     @Test

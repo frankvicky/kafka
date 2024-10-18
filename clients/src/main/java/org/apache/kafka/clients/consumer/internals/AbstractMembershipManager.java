@@ -1250,7 +1250,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             if (memberEpoch > 0) {
                 notifyEpochChange(Optional.of(memberEpoch), Optional.ofNullable(memberId));
             } else {
-                notifyEpochChange(Optional.empty(), Optional.empty());
+                notifyEpochChange(Optional.empty(), Optional.ofNullable(memberId));
             }
         }
     }

@@ -266,14 +266,14 @@ public class ConsumerMembershipManagerTest {
         MemberStateListener listener = mock(MemberStateListener.class);
         membershipManager.registerStateListener(listener);
         mockStableMember(membershipManager);
-        verify(listener).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH), Optional.of(membershipManager.memberId()));
+        verify(listener).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH), Optional.of(membershipManager.memberId));
         clearInvocations(listener);
 
         mockLeaveGroup();
         membershipManager.leaveGroup();
         verify(subscriptionState).unsubscribe();
         assertEquals(MemberState.LEAVING, membershipManager.state());
-        verify(listener).onMemberEpochUpdated(Optional.empty(), Optional.empty());
+        verify(listener).onMemberEpochUpdated(Optional.empty(), Optional.of(membershipManager.memberId));
     }
 
     @Test
@@ -347,7 +347,7 @@ public class ConsumerMembershipManagerTest {
         completeCallback(callbackEvent, membershipManager);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
-        verify(membershipManager).notifyEpochChange(Optional.empty(), Optional.empty());
+        verify(membershipManager).notifyEpochChange(Optional.empty(), Optional.of(membershipManager.memberId));
         assertTrue(membershipManager.shouldSkipHeartbeat());
     }
 

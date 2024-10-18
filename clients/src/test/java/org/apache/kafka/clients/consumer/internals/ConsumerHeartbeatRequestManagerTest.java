@@ -269,6 +269,7 @@ public class ConsumerHeartbeatRequestManagerTest {
                 (ConsumerGroupHeartbeatRequest) request.requestBuilder().build(version);
 
         // Should include epoch 0 to join and no member ID.
+        // TODO FIX IT
         assertTrue(heartbeatRequest.data().memberId().isEmpty());
         assertEquals(0, heartbeatRequest.data().memberEpoch());
 
@@ -587,6 +588,7 @@ public class ConsumerHeartbeatRequestManagerTest {
 
         createHeartbeatRequestStateWithZeroHeartbeatInterval();
 
+        // TODO fix it
         // The initial ConsumerGroupHeartbeatRequest sets most fields to their initial empty values
         ConsumerGroupHeartbeatRequestData data = heartbeatState.buildRequestData();
         assertEquals(DEFAULT_GROUP_ID, data.groupId());
@@ -938,7 +940,7 @@ public class ConsumerHeartbeatRequestManagerTest {
     private void mockJoiningMemberData(String instanceId) {
         when(membershipManager.state()).thenReturn(MemberState.JOINING);
         when(membershipManager.groupInstanceId()).thenReturn(Optional.ofNullable(instanceId));
-        when(membershipManager.memberId()).thenReturn("");
+        when(membershipManager.memberId()).thenReturn(DEFAULT_MEMBER_ID);
         when(membershipManager.memberEpoch()).thenReturn(0);
         when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
         when(membershipManager.currentAssignment()).thenReturn(LocalAssignment.NONE);
