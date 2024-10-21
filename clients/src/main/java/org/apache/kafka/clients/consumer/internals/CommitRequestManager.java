@@ -1225,7 +1225,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             requestsToPurge.forEach(RetriableRequestState::maybeExpire);
         }
 
-        private void clearAll() {
+        void clearAll() {
             unsentOffsetCommits.clear();
             unsentOffsetFetches.clear();
         }

@@ -95,6 +95,7 @@ public class ConsumerHeartbeatRequestManagerTest {
     private Time time;
     private Timer pollTimer;
     private CoordinatorRequestManager coordinatorRequestManager;
+    private CommitRequestManager commitRequestManager;
     private SubscriptionState subscriptions;
     private Metadata metadata;
     private ConsumerHeartbeatRequestManager heartbeatRequestManager;
@@ -110,6 +111,7 @@ public class ConsumerHeartbeatRequestManagerTest {
         this.logContext = new LogContext();
         this.pollTimer = spy(time.timer(DEFAULT_MAX_POLL_INTERVAL_MS));
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        this.commitRequestManager = mock(CommitRequestManager.class);
         this.heartbeatState = mock(HeartbeatState.class);
         this.backgroundEventHandler = mock(BackgroundEventHandler.class);
         this.subscriptions = mock(SubscriptionState.class);
@@ -131,6 +133,7 @@ public class ConsumerHeartbeatRequestManagerTest {
                 pollTimer,
                 config,
                 coordinatorRequestManager,
+                commitRequestManager,
                 membershipManager,
                 heartbeatState,
                 heartbeatRequestState,
@@ -928,6 +931,7 @@ public class ConsumerHeartbeatRequestManagerTest {
                 pollTimer,
                 config(),
                 coordinatorRequestManager,
+                commitRequestManager,
                 membershipManager,
                 heartbeatState,
                 heartbeatRequestState,

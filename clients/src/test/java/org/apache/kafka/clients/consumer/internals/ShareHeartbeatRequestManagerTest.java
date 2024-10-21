@@ -87,6 +87,7 @@ public class ShareHeartbeatRequestManagerTest {
     private Time time;
     private Timer pollTimer;
     private CoordinatorRequestManager coordinatorRequestManager;
+    private CommitRequestManager commitRequestManager;
     private SubscriptionState subscriptions;
     private Metadata metadata;
     private ShareHeartbeatRequestManager heartbeatRequestManager;
@@ -102,6 +103,7 @@ public class ShareHeartbeatRequestManagerTest {
         time = new MockTime();
         pollTimer = spy(time.timer(DEFAULT_MAX_POLL_INTERVAL_MS));
         coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        commitRequestManager = mock(CommitRequestManager.class);
         subscriptions = mock(SubscriptionState.class);
         backgroundEventHandler = mock(BackgroundEventHandler.class);
         membershipManager = mock(ShareMembershipManager.class);
@@ -124,6 +126,7 @@ public class ShareHeartbeatRequestManagerTest {
                 pollTimer,
                 config,
                 coordinatorRequestManager,
+                commitRequestManager,
                 membershipManager,
                 heartbeatState,
                 heartbeatRequestState,
@@ -676,6 +679,7 @@ public class ShareHeartbeatRequestManagerTest {
                 pollTimer,
                 config(),
                 coordinatorRequestManager,
+                commitRequestManager,
                 membershipManager,
                 heartbeatState,
                 heartbeatRequestState,

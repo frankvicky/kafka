@@ -74,6 +74,11 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     protected final CoordinatorRequestManager coordinatorRequestManager;
 
     /**
+     * The CommitRequestManager handles fetching and committing offsets.
+     */
+    private final CommitRequestManager commitRequestManager;
+
+    /**
      * HeartbeatRequestState manages heartbeat request timing and retries
      */
     private final HeartbeatRequestState heartbeatRequestState;
@@ -99,10 +104,12 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
             final Time time,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
+            final CommitRequestManager commitRequestManager,
             final BackgroundEventHandler backgroundEventHandler,
             final HeartbeatMetricsManager metricsManager) {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.logger = logContext.logger(getClass());
+        this.commitRequestManager = commitRequestManager;
         this.backgroundEventHandler = backgroundEventHandler;
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -118,12 +125,14 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
             final Timer timer,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
+            final CommitRequestManager commitRequestManager,
             final HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler,
             final HeartbeatMetricsManager metricsManager) {
         this.logger = logContext.logger(this.getClass());
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         this.coordinatorRequestManager = coordinatorRequestManager;
+        this.commitRequestManager = commitRequestManager;
         this.heartbeatRequestState = heartbeatRequestState;
         this.backgroundEventHandler = backgroundEventHandler;
         this.pollTimer = timer;
@@ -396,6 +405,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 membershipManager().transitionToFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
                 heartbeatRequestState.reset();
+                commitRequestManager.pendingRequests.inflightOffsetFetches.clear();
+                commitRequestManager.pendingRequests.clearAll();
                 break;
 
             case UNKNOWN_MEMBER_ID:
@@ -405,6 +416,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 membershipManager().transitionToFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
                 heartbeatRequestState.reset();
+                commitRequestManager.pendingRequests.inflightOffsetFetches.clear();
+                commitRequestManager.pendingRequests.clearAll();
                 break;
 
             default:
@@ -427,6 +440,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     protected void handleFatalFailure(Throwable error) {
         backgroundEventHandler.add(new ErrorEvent(error));
         membershipManager().transitionToFatal();
+        commitRequestManager.pendingRequests.inflightOffsetFetches.clear();
+        commitRequestManager.pendingRequests.clearAll();
     }
 
 

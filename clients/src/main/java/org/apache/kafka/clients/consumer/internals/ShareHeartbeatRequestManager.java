@@ -55,11 +55,12 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
             final Time time,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
+            final CommitRequestManager commitRequestManager,
             final SubscriptionState subscriptions,
             final ShareMembershipManager membershipManager,
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
-        super(logContext, time, config, coordinatorRequestManager, backgroundEventHandler,
+        super(logContext, time, config, coordinatorRequestManager, commitRequestManager, backgroundEventHandler,
             new HeartbeatMetricsManager(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX));
         this.membershipManager = membershipManager;
         this.heartbeatState = new HeartbeatState(subscriptions, membershipManager);
@@ -71,12 +72,13 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
             final Timer timer,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
+            final CommitRequestManager commitRequestManager,
             final ShareMembershipManager membershipManager,
             final HeartbeatState heartbeatState,
             final AbstractHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
-        super(logContext, timer, config, coordinatorRequestManager, heartbeatRequestState, backgroundEventHandler,
+        super(logContext, timer, config, coordinatorRequestManager, commitRequestManager, heartbeatRequestState, backgroundEventHandler,
             new HeartbeatMetricsManager(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX));
         this.membershipManager = membershipManager;
         this.heartbeatState = heartbeatState;

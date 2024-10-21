@@ -224,6 +224,7 @@ public class RequestManagers implements Closeable {
                             time,
                             config,
                             coordinator,
+                            commitRequestManager,
                             subscriptions,
                             membershipManager,
                             backgroundEventHandler,
@@ -286,6 +287,18 @@ public class RequestManagers implements Closeable {
                         retryBackoffMaxMs,
                         backgroundEventHandler,
                         groupRebalanceConfig.groupId);
+                // TODO figure out
+                CommitRequestManager commitRequestManager = new CommitRequestManager(
+                        time,
+                        logContext,
+                        subscriptions,
+                        config,
+                        coordinator,
+                        null,
+                        groupRebalanceConfig.groupId,
+                        groupRebalanceConfig.groupInstanceId,
+                        metrics
+                );
                 ShareMembershipManager shareMembershipManager = new ShareMembershipManager(
                         logContext,
                         groupRebalanceConfig.groupId,
@@ -300,6 +313,7 @@ public class RequestManagers implements Closeable {
                         time,
                         config,
                         coordinator,
+                        commitRequestManager,
                         subscriptions,
                         shareMembershipManager,
                         backgroundEventHandler,

@@ -58,11 +58,12 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             final Time time,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
+            final CommitRequestManager commitRequestManager,
             final SubscriptionState subscriptions,
             final ConsumerMembershipManager membershipManager,
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
-        super(logContext, time, config, coordinatorRequestManager, backgroundEventHandler,
+        super(logContext, time, config, coordinatorRequestManager, commitRequestManager, backgroundEventHandler,
             new HeartbeatMetricsManager(metrics));
         this.membershipManager = membershipManager;
         this.heartbeatState = new HeartbeatState(subscriptions, membershipManager, maxPollIntervalMs);
@@ -74,12 +75,13 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             final Timer timer,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
+            final CommitRequestManager commitRequestManager,
             final ConsumerMembershipManager membershipManager,
             final HeartbeatState heartbeatState,
             final AbstractHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
-        super(logContext, timer, config, coordinatorRequestManager, heartbeatRequestState, backgroundEventHandler,
+        super(logContext, timer, config, coordinatorRequestManager, commitRequestManager, heartbeatRequestState, backgroundEventHandler,
             new HeartbeatMetricsManager(metrics));
         this.membershipManager = membershipManager;
         this.heartbeatState = heartbeatState;
