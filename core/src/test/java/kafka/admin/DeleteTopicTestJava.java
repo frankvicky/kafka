@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewPartitions;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
 import org.junit.jupiter.api.extension.ExtendWith;
+import scala.jdk.javaapi.CollectionConverters;
 import scala.jdk.javaapi.OptionConverters;
 
 import java.io.File;
@@ -48,6 +50,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -57,62 +60,59 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(types = {Type.KRAFT}, serverProperties = {
+@ClusterTestDefaults(types = {Type.KRAFT},
+    brokers = 3,
+    serverProperties = {
         @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-})
+    })
 public class DeleteTopicTestJava {
     private static final String DEFAULT_TOPIC = "topic";
     private final Map<Integer, List<Integer>> expectedReplicaAssignment = Map.of(0, List.of(0, 1, 2));
 
     @ClusterTest
     public void testDeleteTopicWithAllAliveReplicas(ClusterInstance cluster) throws Exception {
-        cluster.createTopic(DEFAULT_TOPIC, 1, (short) 1);
         try (Admin admin = cluster.createAdminClient()) {
+            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
-            waitUtilTopicDelete(admin);
+            kafka.utils.TestUtils.verifyTopicDeletion(null, DEFAULT_TOPIC, 1, CollectionConverters.asScala(cluster.brokers().values()).toSeq());
+            // TODO fix
+//            verifyTopicDeletion(DEFAULT_TOPIC, 1, cluster.brokers().values());
         }
     }
 
-    @ClusterTest(brokers = 3, serverProperties = {@ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3")})
+    @ClusterTest
     public void testResumeDeleteTopicWithRecoveredFollower(ClusterInstance cluster) throws Exception {
-        cluster.createTopic(DEFAULT_TOPIC, 1, (short) 3);
-        TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
-
         try (Admin admin = cluster.createAdminClient()) {
-            Map<Integer, KafkaBroker> idToBroker = cluster.brokers();
-            int leaderId = waitUtilLeaderIsKnown(idToBroker, topicPartition).get();
-            KafkaBroker follower = findFollower(idToBroker, leaderId);
+            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
+            int leaderId = waitUtilLeaderIsKnown(cluster.brokers(), topicPartition).get();
+            KafkaBroker follower = findFollower(cluster.brokers().values(), leaderId);
 
             follower.shutdown();
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
 
-            idToBroker.values()
+            TestUtils.waitForCondition(() -> cluster.brokers().values()
                     .stream()
                     .filter(broker -> broker.config().brokerId() != follower.config().brokerId())
-                    .forEach(b -> {
-                        try {
-                            TestUtils.waitForCondition(() -> b.logManager().getLog(topicPartition, false).isEmpty(),
-                                    "Replicas 0,1 have not deleted log.");
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
-                        }
-                    });
+                    .allMatch(b -> b.logManager().getLog(topicPartition, false).isEmpty()),
+                "Replicas 0,1 have not deleted log.");
 
             follower.startup();
-            waitUtilTopicDelete(admin);
+            kafka.utils.TestUtils.verifyTopicDeletion(null, DEFAULT_TOPIC, 1, CollectionConverters.asScala(cluster.brokers().values()).toSeq());
+            // TODO fix
+//            verifyTopicDeletion(DEFAULT_TOPIC, 1, cluster.brokers().values());
         }
     }
 
-    @ClusterTest(brokers = 4, serverProperties = {@ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3")})
+    @ClusterTest(brokers = 4)
     public void testPartitionReassignmentDuringDeleteTopic(ClusterInstance cluster) throws Exception {
-        cluster.createTopic(DEFAULT_TOPIC, 1, (short) 4);
-        TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
         try (Admin admin = cluster.createAdminClient()) {
-            Map<Integer, KafkaBroker> brokers = cluster.brokers();
-            Map<Integer, KafkaBroker> servers = findPartitionHostingBrokers(brokers);
-            int leaderId = waitUtilLeaderIsKnown(brokers, topicPartition).get();
-            KafkaBroker follower = findFollower(servers, leaderId);
+            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
+            Map<Integer, KafkaBroker> servers = findPartitionHostingBrokers(cluster.brokers());
+            int leaderId = waitUtilLeaderIsKnown(cluster.brokers(), topicPartition).get();
+            KafkaBroker follower = findFollower(servers.values(), leaderId);
             follower.shutdown();
 
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
@@ -122,23 +122,27 @@ public class DeleteTopicTestJava {
             try (Admin otherAdmin = Admin.create(properties)) {
                 waitUtilTopicGone(otherAdmin);
                 assertThrows(ExecutionException.class, () -> otherAdmin.alterPartitionReassignments(
-                        Map.of(topicPartition, Optional.of(new NewPartitionReassignment(List.of(1, 2, 3))))
+                    Map.of(topicPartition, Optional.of(new NewPartitionReassignment(List.of(1, 2, 3))))
                 ).all().get());
             }
 
             follower.startup();
-            waitUtilTopicDelete(admin);
+            kafka.utils.TestUtils.verifyTopicDeletion(null, DEFAULT_TOPIC, 1, CollectionConverters.asScala(cluster.brokers().values()).toSeq());
+            // TODO fix
         }
     }
 
-    @ClusterTest(brokers = 4, serverProperties = {@ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3")})
+    @ClusterTest(brokers = 4)
     public void testIncreasePartitionCountDuringDeleteTopic(ClusterInstance cluster) throws Exception {
-        cluster.createTopic(DEFAULT_TOPIC, 1, (short) 4);
-        TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
         try (Admin admin = cluster.createAdminClient()) {
+            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
             Map<Integer, KafkaBroker> partitionHostingBrokers = findPartitionHostingBrokers(cluster.brokers());
+            TestUtils.waitForCondition(() -> partitionHostingBrokers.values().stream().allMatch(broker ->
+                broker.logManager().getLog(topicPartition, false).isDefined()),
+                "Replicas for topic test not created.");
             int leaderId = waitUtilLeaderIsKnown(partitionHostingBrokers, topicPartition).get();
-            KafkaBroker follower = findFollower(partitionHostingBrokers, leaderId);
+            KafkaBroker follower = findFollower(partitionHostingBrokers.values(), leaderId);
             follower.shutdown();
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
 
@@ -152,62 +156,113 @@ public class DeleteTopicTestJava {
             }
 
             follower.startup();
-            // TODO verify ??
-            waitUtilTopicDelete(admin);
+            kafka.utils.TestUtils.verifyTopicDeletion(null, DEFAULT_TOPIC, 1, CollectionConverters.asScala(partitionHostingBrokers.values()).toSeq());
+            // TODO fix
         }
     }
 
     @ClusterTest
     public void testDeleteTopicDuringAddPartition(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.createAdminClient()) {
-            cluster.createTopic(DEFAULT_TOPIC, 1, (short) 1);
+            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
             int leaderId = waitUtilLeaderIsKnown(cluster.brokers(), new TopicPartition(DEFAULT_TOPIC, 0)).get();
-            TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
-            KafkaBroker follower = findFollower(cluster.brokers(), leaderId);
+            TopicPartition newTopicPartition = new TopicPartition(DEFAULT_TOPIC, 1);
+            KafkaBroker follower = findFollower(cluster.brokers().values(), leaderId);
             follower.shutdown();
             TestUtils.waitForCondition(() -> follower.brokerState().equals(BrokerState.SHUTTING_DOWN),
-                    "Follower " + follower.config().brokerId() + " was not shutdown");
-            increasePartitions(admin, DEFAULT_TOPIC, 3, Collections.emptyList());
+                "Follower " + follower.config().brokerId() + " was not shutdown");
+            increasePartitions(admin, DEFAULT_TOPIC, 3, cluster.brokers().values().stream().filter(broker ->
+                broker.config().brokerId() != follower.config().brokerId()).collect(Collectors.toList()));
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
             follower.startup();
-            verifyTopicDeletion(DEFAULT_TOPIC, 1, cluster.brokers().values());
+            kafka.utils.TestUtils.verifyTopicDeletion(null, DEFAULT_TOPIC, 1, CollectionConverters.asScala(cluster.brokers().values()).toSeq());
+            // TODO fix
+//            verifyTopicDeletion(DEFAULT_TOPIC, 1, cluster.brokers().values());
             TestUtils.waitForCondition(() -> cluster.brokers().values()
-                        .stream().allMatch(broker -> broker.logManager().getLog(topicPartition, false).isEmpty()),
-                    "Replica logs not for new partition [" + DEFAULT_TOPIC + ",1] not deleted after delete topic is complete.");
+                    .stream().allMatch(broker -> broker.logManager().getLog(newTopicPartition, false).isEmpty()),
+                "Replica logs not for new partition [" + DEFAULT_TOPIC + ",1] not deleted after delete topic is complete.");
+        }
+    }
+
+    @ClusterTest
+    public void testAddPartitionDuringDeleteTopic(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.createAdminClient()) {
+            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            TopicPartition newTopicPartition = new TopicPartition(DEFAULT_TOPIC, 1);
+            admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
+            increasePartitions(admin, DEFAULT_TOPIC, 3, Collections.emptyList());
+            // TODO rewrite java
+            kafka.utils.TestUtils.verifyTopicDeletion(null, DEFAULT_TOPIC, 1, CollectionConverters.asScala(cluster.brokers().values()).toSeq());
+            TestUtils.waitForCondition(() -> cluster.brokers().values().stream().allMatch(broker ->
+                    broker.logManager().getLog(newTopicPartition, false).isEmpty()),
+                "Replica logs not deleted after delete topic is complete");
+        }
+    }
+
+    @ClusterTest
+    public void testRecreateTopicAfterDeletion(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.createAdminClient()) {
+            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
+            admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
+            // TODO rewrite java
+            kafka.utils.TestUtils.verifyTopicDeletion(null, DEFAULT_TOPIC, 1, CollectionConverters.asScala(cluster.brokers().values()).toSeq());
+            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            TestUtils.waitForCondition(() -> cluster.brokers().values().stream().allMatch(broker ->
+                    broker.logManager().getLog(topicPartition, false).isDefined()),
+                "Replicas for topic test not created.");
+        }
+    }
+
+    @ClusterTest
+    public void testDeleteNonExistingTopic(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.createAdminClient()) {
+            admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
+            TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
+            String topic = "test2";
+            TestUtils.waitForCondition(() -> {
+                try {
+                    admin.deleteTopics(List.of(topic)).all().get();
+                    return false;
+                } catch (Exception exception) {
+                    return exception.getCause().getClass().equals(UnknownTopicOrPartitionException.class);
+                }
+            }, "Topic test2 should not exist.");
+
+            // TODO rewrite java
+            kafka.utils.TestUtils.verifyTopicDeletion(null, topic, 1,
+                CollectionConverters.asScala(cluster.brokers().values()).toSeq());
+
+            TestUtils.waitForCondition(() -> cluster.brokers().values().stream().allMatch(broker ->
+                    broker.logManager().getLog(topicPartition, false).isDefined()),
+                "Replicas for topic test not created.");
+            kafka.utils.TestUtils.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, DEFAULT_TOPIC, 0, 1000,
+                OptionConverters.toScala(Optional.empty()), OptionConverters.toScala(Optional.empty()));
         }
     }
 
     private Optional<Integer> waitUtilLeaderIsKnown(Map<Integer, KafkaBroker> idToBroker,
                                                     TopicPartition topicPartition) throws InterruptedException {
-        Optional<Integer> brokerId = idToBroker.values()
-                .stream()
-                .filter(broker -> broker.replicaManager()
-                        .onlinePartition(topicPartition)
-                        .exists(tp -> tp.leaderIdIfLocal().isDefined()))
-                .map(broker -> broker.config().brokerId())
-                .findFirst();
-        TestUtils.waitForCondition(brokerId::isPresent,
-                "Partition " + topicPartition + " not made yet" + " after 15 seconds");
-        return brokerId;
+        TestUtils.waitForCondition(() -> isLeaderKnown(idToBroker, topicPartition).get().isPresent(),
+            "Partition " + topicPartition + " not made yet" + " after 15 seconds");
+        return isLeaderKnown(idToBroker, topicPartition).get();
     }
 
-    private KafkaBroker findFollower(Map<Integer, KafkaBroker> idToBroker, int leaderId) {
-        return idToBroker.entrySet()
-                .stream()
-                .filter(entry -> entry.getKey().equals(leaderId))
-                .findFirst()
-                .map(Map.Entry::getValue)
-                .orElseGet(() -> fail("Can't find any follower"));
+    private Supplier<Optional<Integer>> isLeaderKnown(Map<Integer, KafkaBroker> idToBroker, TopicPartition topicPartition) {
+        return () -> idToBroker.values()
+            .stream()
+            .filter(broker -> OptionConverters.toJava(broker.replicaManager()
+                    .onlinePartition(topicPartition))
+                .stream().anyMatch(tp -> tp.leaderIdIfLocal().isDefined()))
+            .map(broker -> broker.config().brokerId())
+            .findFirst();
     }
 
-    private void waitUtilTopicDelete(Admin admin) throws InterruptedException {
-        TestUtils.waitForCondition(() -> {
-            try {
-                return admin.listTopics().listings().get().isEmpty();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }, "Topics should be deleted");
+    private KafkaBroker findFollower(Collection<KafkaBroker> idToBroker, int leaderId) {
+        return idToBroker.stream()
+            .filter(broker -> broker.config().brokerId() != leaderId)
+            .findFirst()
+            .orElseGet(() -> fail("Can't find any follower"));
     }
 
     private void waitUtilTopicGone(Admin admin) throws Exception {
@@ -226,9 +281,10 @@ public class DeleteTopicTestJava {
     private Map<Integer, KafkaBroker> findPartitionHostingBrokers(Map<Integer, KafkaBroker> brokers) {
         return brokers.entrySet()
                 .stream()
-                .filter(b -> expectedReplicaAssignment.get(0).contains(b.getValue().config().brokerId()))
+                .filter(broker -> expectedReplicaAssignment.get(0).contains(broker.getValue().config().brokerId()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
+
     public <B extends KafkaBroker> void increasePartitions(Admin admin,
                                                            String topic,
                                                            int totalPartitionCount,
@@ -246,8 +302,9 @@ public class DeleteTopicTestJava {
             });
         }
     }
+
     public <B extends KafkaBroker> Map<TopicPartition, UpdateMetadataPartitionState> waitForAllPartitionsMetadata(
-            List<B> brokers, String topic, int expectedNumPartitions) throws Exception {
+        List<B> brokers, String topic, int expectedNumPartitions) throws Exception {
 
         // Wait until all brokers have the expected partition metadata
         TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker -> {
@@ -255,7 +312,7 @@ public class DeleteTopicTestJava {
                 return broker.metadataCache().numPartitions(topic).isEmpty();
             } else {
                 return OptionConverters.toJava(broker.metadataCache().numPartitions(topic))
-                        .equals(Optional.of(expectedNumPartitions));
+                    .equals(Optional.of(expectedNumPartitions));
             }
         }), 60000, "Topic [" + topic + "] metadata not propagated after 60000 ms");
 
@@ -264,58 +321,68 @@ public class DeleteTopicTestJava {
         IntStream.range(0, expectedNumPartitions).forEach(i -> {
             TopicPartition topicPartition = new TopicPartition(topic, i);
             UpdateMetadataPartitionState partitionState = OptionConverters.toJava(brokers.get(0).metadataCache()
-                    .getPartitionInfo(topic, i)).orElseThrow(() ->
-                            new IllegalStateException("Cannot get topic: " + topic + ", partition: " + i + " in server metadata cache"));
+                .getPartitionInfo(topic, i)).orElseThrow(() ->
+                new IllegalStateException("Cannot get topic: " + topic + ", partition: " + i + " in server metadata cache"));
             partitionMetadataMap.put(topicPartition, partitionState);
         });
 
         return partitionMetadataMap;
     }
+
     public <B extends KafkaBroker> void verifyTopicDeletion(String topic,
                                                             int numPartitions,
                                                             Collection<B> brokers) throws Exception {
         List<TopicPartition> topicPartitions = IntStream.range(0, numPartitions)
-                .mapToObj(partition -> new TopicPartition(topic, partition))
-                .collect(Collectors.toList());
+            .mapToObj(partition -> new TopicPartition(topic, partition))
+            .collect(Collectors.toList());
 
         // Ensure that the topic-partition has been deleted from all brokers' replica managers
         TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                        topicPartitions.stream().allMatch(tp -> broker.replicaManager().onlinePartition(tp).isEmpty())),
-                "Replica manager's should have deleted all of this topic's partitions");
+                topicPartitions.stream().allMatch(tp -> broker.replicaManager().onlinePartition(tp).isEmpty())),
+            "Replica manager's should have deleted all of this topic's partitions");
 
         // Ensure that logs from all replicas are deleted
         TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                        topicPartitions.stream().allMatch(tp -> broker.logManager().getLog(tp, false).isEmpty())),
-                "Replica logs not deleted after delete topic is complete");
+                topicPartitions.stream().allMatch(tp -> broker.logManager().getLog(tp, false).isEmpty())),
+            "Replica logs not deleted after delete topic is complete");
 
         // Ensure that the topic is removed from all cleaner offsets
         TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                        topicPartitions.stream().allMatch(tp -> broker.logManager().liveLogDirs().forall(logDir -> {
-                            OffsetCheckpointFile checkpointFile;
-                            try {
-                                checkpointFile = new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                            return !checkpointFile.read().containsKey(tp);
-                        }))),
-                "Cleaner offset for deleted partition should have been removed");
+                topicPartitions.stream().allMatch(tp -> {
+                    List<File> liveLogDirs = CollectionConverters.asJava(broker.logManager().liveLogDirs());
+                    return liveLogDirs.stream().allMatch(logDir -> {
+                        OffsetCheckpointFile checkpointFile;
+                        try {
+                            checkpointFile = new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                        return !checkpointFile.read().containsKey(tp);
+                    });
+                })),
+            "Cleaner offset for deleted partition should have been removed");
 
         // Ensure that the topic directories are soft-deleted
         TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                        broker.config().logDirs().forall(logDir ->
-                                topicPartitions.stream().noneMatch(tp ->
-                                        new File(logDir, tp.topic() + "-" + tp.partition()).exists()))),
-                "Failed to soft-delete the data to a delete directory");
+                CollectionConverters.asJava(broker.config().logDirs()).stream().allMatch(logDir ->
+                    topicPartitions.stream().noneMatch(tp ->
+                        new File(logDir, tp.topic() + "-" + tp.partition()).exists()))),
+            "Failed to soft-delete the data to a delete directory");
 
         // Ensure that the topic directories are hard-deleted
         TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                        broker.config().logDirs().forall(logDir ->
-                                topicPartitions.stream().allMatch(tp ->
-                                        Arrays.stream(new File(logDir).list())
-                                                .noneMatch(partitionDirectoryName ->
-                                                        partitionDirectoryName.startsWith(tp.topic() + "-" + tp.partition()) &&
-                                                        partitionDirectoryName.endsWith(UnifiedLog.DeleteDirSuffix()))))),
-                "Failed to hard-delete the delete directory");
+            CollectionConverters.asJava(broker.config().logDirs()).stream().allMatch(logDir ->
+                topicPartitions.stream().allMatch(tp -> {
+                    File dir = new File(logDir);
+                    String[] files = dir.list();
+                    if (files == null) {
+                        return true;
+                    }
+                    return Arrays.stream(files).noneMatch(partitionDirectoryName ->
+                        partitionDirectoryName.startsWith(tp.topic() + "-" + tp.partition()) &&
+                            partitionDirectoryName.endsWith(UnifiedLog.DeleteDirSuffix()));
+                })
+            )
+        ), "Failed to hard-delete the delete directory");
     }
 }
