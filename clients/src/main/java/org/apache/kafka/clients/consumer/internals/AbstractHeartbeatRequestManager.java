@@ -94,6 +94,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      */
     private final HeartbeatMetricsManager metricsManager;
 
+    private final CommitRequestManager commitRequestManager;
+
     AbstractHeartbeatRequestManager(
             final LogContext logContext,
             final Time time,
@@ -394,6 +396,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                         heartbeatRequestName(), membershipManager().memberId(), membershipManager().memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager().transitionToFenced();
+                commitRequestManager.pendingRequests.clearAll();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
                 heartbeatRequestState.reset();
                 break;
