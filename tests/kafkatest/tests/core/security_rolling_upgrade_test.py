@@ -57,7 +57,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.consumer.group_id = "group"
 
     def bounce(self):
-        self.kafka.start_minikdc_if_necessary()
+        # self.kafka.start_minikdc_if_necessary()
         self.kafka.restart_cluster(after_each_broker_restart = lambda: time.sleep(10))
 
     def open_secured_port(self, client_protocol):
