@@ -59,6 +59,7 @@ public class CoordinatorRequestManager implements RequestManager {
     private final RequestState coordinatorRequestState;
     private long timeMarkedUnknownMs = -1L; // starting logging a warning only after unable to connect for a while
     private long totalDisconnectedMin = 0;
+    private boolean closing = false;
     private Node coordinator;
 
     public CoordinatorRequestManager(
@@ -92,7 +93,7 @@ public class CoordinatorRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        if (this.coordinator != null)
+        if (closing || this.coordinator != null)
             return EMPTY;
 
         if (coordinatorRequestState.canSendRequest(currentTimeMs)) {
@@ -101,6 +102,12 @@ public class CoordinatorRequestManager implements RequestManager {
         }
 
         return new NetworkClientDelegate.PollResult(coordinatorRequestState.remainingBackoffMs(currentTimeMs));
+    }
+
+    @Override
+    public NetworkClientDelegate.PollResult pollOnClose(long currentTimeMs) {
+        closing = true;
+        return EMPTY;
     }
 
     NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {
