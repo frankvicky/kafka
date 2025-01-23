@@ -1319,28 +1319,40 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * </ol>
      */
     private void close(Duration timeout, boolean swallowException) {
+        String grId = groupMetadata().groupId();
+        System.err.println("##### " + grId + " close");
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
         // We are already closing with a timeout, don't allow wake-ups from here on.
         wakeupTrigger.disableWakeups();
+        System.err.println("##### " + grId + " disable wakeups");
 
         final Timer closeTimer = time.timer(timeout);
         clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);
+        System.err.println("##### " + grId + " ClientTelemetryReporter");
         closeTimer.update();
         // Prepare shutting down the network thread
         // Prior to closing the network thread, we need to make sure the following operations happen in the right
         // sequence...
+
+        System.err.println("##### " + grId + " swallow");
         swallow(log, Level.ERROR, "Failed to auto-commit offsets",
             () -> autoCommitOnClose(closeTimer), firstException);
+        System.err.println("##### " + grId + " CLOSE auto-commit");
         swallow(log, Level.ERROR, "Failed to release group assignment",
             () -> runRebalanceCallbacksOnClose(closeTimer), firstException);
+        System.err.println("##### " + grId + " CLOSE release group assignment");
         swallow(log, Level.ERROR, "Failed to leave group while closing consumer",
             () -> leaveGroupOnClose(closeTimer), firstException);
+        System.err.println("##### " + grId + " CLOSE leave group while closing consumer");
         swallow(log, Level.ERROR, "Failed invoking asynchronous commit callbacks while closing consumer",
             () -> awaitPendingAsyncCommitsAndExecuteCommitCallbacks(closeTimer, false), firstException);
+        System.err.println("##### " + grId + " CLOSE asynchronous commit callbacks");
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
+
+        System.err.println("##### " + grId + " CLOSE applicationEventHandler");
         closeTimer.update();
 
         // close() can be called from inside one of the constructors. In that case, it's possible that neither
@@ -1424,6 +1436,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Visible for testing
     void commitSyncAllConsumed(final Timer timer) {
         log.debug("Sending synchronous auto-commit on closing");
+
+        System.err.println("##### " + groupMetadata().groupId() + " commitSyncAllConsumed");
         try {
             commitSync(Duration.ofMillis(timer.remainingMs()));
         } catch (Exception e) {

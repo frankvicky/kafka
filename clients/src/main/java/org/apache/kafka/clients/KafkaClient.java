@@ -213,4 +213,5 @@ public interface KafkaClient extends Closeable {
      */
     boolean active();
 
+    void cancelFindCoordinatorRequest();
 }

@@ -724,6 +724,11 @@ public class NetworkClient implements KafkaClient {
         return state.get() == State.ACTIVE;
     }
 
+    @Override
+    public void cancelFindCoordinatorRequest() {
+        inFlightRequests.cancelFindCoordinatorRequest();
+    }
+
     private void ensureActive() {
         if (!active())
             throw new DisconnectException("NetworkClient is no longer active, state is " + state);

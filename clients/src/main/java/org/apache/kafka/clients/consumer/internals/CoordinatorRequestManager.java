@@ -97,6 +97,7 @@ public class CoordinatorRequestManager implements RequestManager {
             return EMPTY;
 
         if (coordinatorRequestState.canSendRequest(currentTimeMs)) {
+            System.err.println("########  create find coordinator request, groupId: " + groupId + " #########");
             NetworkClientDelegate.UnsentRequest request = makeFindCoordinatorRequest(currentTimeMs);
             return new NetworkClientDelegate.PollResult(request);
         }
@@ -106,6 +107,7 @@ public class CoordinatorRequestManager implements RequestManager {
 
     @Override
     public NetworkClientDelegate.PollResult pollOnClose(long currentTimeMs) {
+        System.err.println("########  pollOnClose, groupId " + groupId + " #########");
         closing = true;
         return EMPTY;
     }

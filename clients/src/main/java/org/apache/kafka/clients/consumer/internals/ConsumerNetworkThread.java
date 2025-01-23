@@ -301,6 +301,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * @param timeout Upper bound of time to wait for the network thread to close its resources
      */
     private void closeInternal(final Duration timeout) {
+
         long timeoutMs = timeout.toMillis();
         log.trace("Signaling the consumer network thread to close in {}ms", timeoutMs);
         running = false;
@@ -320,6 +321,9 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private void sendUnsentRequests(final Timer timer) {
         if (!networkClientDelegate.hasAnyPendingRequests())
             return;
+
+        System.err.println("####### close consumer net work thread");
+        networkClientDelegate.cancelFindCoordinatorRequest();
 
         do {
             networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());

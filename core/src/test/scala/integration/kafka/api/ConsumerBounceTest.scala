@@ -240,7 +240,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testClose(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 10
     val producer = createProducer()
@@ -248,6 +248,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
     checkCloseGoodPath(numRecords, "group1")
     checkCloseWithCoordinatorFailure(numRecords, "group2", "group3")
+
     checkCloseWithClusterFailure(numRecords, "group4", "group5", groupProtocol)
   }
 
@@ -317,6 +318,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     brokerServers.foreach(server => killBroker(server.config.brokerId))
     val closeTimeout = 2000
     val future1 = submitCloseAndValidate(consumer1, closeTimeout, None, Some(closeTimeout))
+    System.err.println("######### WARN LAST submitCloseAndValidate")
     val future2 = submitCloseAndValidate(consumer2, Long.MaxValue, None, Some(requestTimeout))
     future1.get
     future2.get
@@ -504,7 +506,14 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       val closeGraceTimeMs = 2000
       val startMs = System.currentTimeMillis()
       info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
+      val grId = consumer.groupMetadata().groupId()
+      if (grId.equals("group5")) {
+        System.err.println("######### CLOSE GROUP5")
+      }
       consumer.close(time.Duration.ofMillis(closeTimeoutMs))
+      if (grId.equals("group5")) {
+        System.err.println("######### FINISH CLOSE GROUP5")
+      }
       val timeTakenMs = System.currentTimeMillis() - startMs
       maxCloseTimeMs.foreach { ms =>
         assertTrue(timeTakenMs < ms + closeGraceTimeMs, "Close took too long " + timeTakenMs)

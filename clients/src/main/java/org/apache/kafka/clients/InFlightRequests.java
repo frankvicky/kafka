@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.protocol.ApiKeys;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -182,5 +184,13 @@ final class InFlightRequests {
     void incrementThrottleTime(String nodeId, long throttleTimeMs) {
         requests.getOrDefault(nodeId, new ArrayDeque<>()).
                 forEach(request -> request.incrementThrottleTime(throttleTimeMs));
+    }
+
+    public void cancelFindCoordinatorRequest() {
+        requests.values().
+            forEach(requests ->
+                requests.removeIf(request ->
+                    request.header.apiKey() == ApiKeys.FIND_COORDINATOR)
+            );
     }
 }

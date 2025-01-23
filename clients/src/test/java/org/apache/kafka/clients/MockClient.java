@@ -20,6 +20,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -586,6 +587,11 @@ public class MockClient implements KafkaClient {
     @Override
     public boolean active() {
         return active;
+    }
+
+    @Override
+    public void cancelFindCoordinatorRequest() {
+        requests.removeIf(request -> request.apiKey() == ApiKeys.FIND_COORDINATOR);
     }
 
     @Override
