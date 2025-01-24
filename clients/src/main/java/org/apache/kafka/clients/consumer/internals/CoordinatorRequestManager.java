@@ -81,6 +81,11 @@ public class CoordinatorRequestManager implements RequestManager {
         );
     }
 
+    @Override
+    public void signalClose() {
+        closing = true;
+    }
+
     /**
      * Poll for the FindCoordinator request.
      * If we don't need to discover a coordinator, this method will return a PollResult with Long.MAX_VALUE backoff time and an empty list.
@@ -102,12 +107,6 @@ public class CoordinatorRequestManager implements RequestManager {
         }
 
         return new NetworkClientDelegate.PollResult(coordinatorRequestState.remainingBackoffMs(currentTimeMs));
-    }
-
-    @Override
-    public NetworkClientDelegate.PollResult pollOnClose(long currentTimeMs) {
-        closing = true;
-        return EMPTY;
     }
 
     NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {

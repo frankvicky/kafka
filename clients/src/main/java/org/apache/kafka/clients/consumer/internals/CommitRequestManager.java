@@ -177,8 +177,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         // poll only when the coordinator node is known.
-        if (coordinatorRequestManager.coordinator().isEmpty())
+        if (coordinatorRequestManager.coordinator().isEmpty()) {
+            System.err.println("###### Coordinator isEmpty");
             return EMPTY;
+        }
 
         if (closing) {
             return drainPendingOffsetCommitRequests();
@@ -461,6 +463,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 result.complete(requestAttempt.offsets);
             } else {
                 if (error instanceof RetriableException) {
+                    System.err.println("###### " + error.getMessage());
                     if (requestAttempt.isExpired()) {
                         log.info("OffsetCommit timeout expired so it won't be retried anymore");
                         result.completeExceptionally(maybeWrapAsTimeoutException(error));

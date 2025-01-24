@@ -257,18 +257,13 @@ public class CoordinatorRequestManagerTest {
     @Test
     public void testSignalOnClose() {
         CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
-
         expectFindCoordinatorRequest(coordinatorManager, Errors.NONE);
         assertTrue(coordinatorManager.coordinator().isPresent());
-
         coordinatorManager.markCoordinatorUnknown("coordinator changed", time.milliseconds());
         assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
-
-        coordinatorManager.pollOnClose(time.milliseconds());
-
+        coordinatorManager.signalClose();
         time.sleep(RETRY_BACKOFF_MS - 1);
         assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
-
         time.sleep(RETRY_BACKOFF_MS);
         assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests,
             "Should not generate find coordinator request during close");
