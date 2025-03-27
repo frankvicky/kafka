@@ -17,35 +17,36 @@
 package org.apache.kafka.clients.consumer;
 
 
-import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.junit.jupiter.api.Assertions;
+import org.apache.kafka.common.test.api.Type;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.stream.IntStream;
 
-import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.CLIENT_ID_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -54,75 +55,92 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Timeout(600)
 @ClusterTestDefaults(
+    types = {Type.KRAFT},
+    brokers = 3,
     serverProperties = {
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "3"),
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "100"),
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, value = "60000"),
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "10"),
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "3"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "100"),
+        @ClusterConfigProperty(key = GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, value = "60000"),
+        @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "10"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
     }
 )
 public class PlaintextConsumerPollTest {
+    private static final String TOPIC = "TOPIC";
+    private static final int PARTITION = 0;
+    private final TopicPartition topicPartition = new TopicPartition(TOPIC, PARTITION);
+    private final ClusterInstance cluster;
+
+    public PlaintextConsumerPollTest(ClusterInstance cluster) {
+        this.cluster = cluster;
+    }
+
+    @BeforeEach
+    void setUp() {
+        try (Admin admin = cluster.admin()) {
+            admin.createTopics(List.of(new NewTopic(TOPIC, 2, (short) 3)));
+        }
+    }
 
     @ClusterTest
-    void testMaxPollRecords(ClusterInstance cluster) {
+    void testMaxPollRecords() throws InterruptedException {
+        try (Producer<byte[], byte[]> producer = createProducer(cluster)) {
+            int maxPollRecords = 2;
+            int numberOfRecords = 10000;
+            long startingTimestamp = System.currentTimeMillis();
+            sendRecords(producer, numberOfRecords, topicPartition, startingTimestamp);
+            Map<String, Object> consumerConfigs = Map.of(
+                GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT),
+                ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords
+            );
+            try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfigs)) {
+                consumer.assign(List.of(topicPartition));
+                consumeAndVerifyRecords(consumer,
+                    numberOfRecords,
+                    0,
+                    0,
+                    startingTimestamp,
+                    TimestampType.CREATE_TIME,
+                    topicPartition,
+                    maxPollRecords);
+            }
 
+        }
     }
 
-    private Producer<byte[], byte[]> createProducer(String bootstrapServer) {
-        Map<String, Object> producerConfig = Map.of(
-            ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer,
-            ProducerConfig.ACKS_CONFIG, "-1"
-        );
-        return new KafkaProducer<>(producerConfig, new ByteArraySerializer(), new ByteArraySerializer());
-    }
-
-    private Consumer<byte[], byte[]> createConsumer(GroupProtocol protocol, String bootstrapServer) {
-        Map<String, Object> consumerConfig = Map.of(
-            CLIENT_ID_CONFIG, "ConsumerTestConsumer",
-            GROUP_ID_CONFIG, "TestGroup",
-            GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT),
-            BOOTSTRAP_SERVERS_CONFIG, bootstrapServer
-        );
-        return new KafkaConsumer<>(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+    private Producer<byte[], byte[]> createProducer(ClusterInstance cluster) {
+        return cluster.producer(Map.of(ProducerConfig.ACKS_CONFIG, "-1"));
     }
 
     private List<ProducerRecord<byte[], byte[]>> sendRecords(Producer<byte[], byte[]> producer,
                                                              int numberOfRecords,
                                                              TopicPartition topicPartition,
-                                                             long startTimestamp,
-                                                             long timestampIncrement) {
-        return IntStream.range(0, numberOfRecords)
-            .mapToObj(i -> produceRecords(producer, topicPartition, startTimestamp, timestampIncrement, i))
-            .toList();
-    }
-
-    private ProducerRecord<byte[], byte[]> produceRecords(Producer<byte[], byte[]> producer,
-                                                          TopicPartition topicPartition,
-                                                          long startingTimestamp,
-                                                          long timestampIncrement,
-                                                          int i) {
-        long timestamp = timestampIncrement > 0 ? (startingTimestamp + timestampIncrement * i) : (startingTimestamp + i);
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(topicPartition.topic(),
-            topicPartition.partition(),
-            timestamp,
-            ("key" + i).getBytes(),
-            ("value" + i).getBytes());
-        producer.send(record);
-        return record;
+                                                             long startTimestamp) {
+        List<ProducerRecord<byte[], byte[]>> list = new ArrayList<>();
+        for (int i = 0; i < numberOfRecords; i++) {
+            long timestamp = startTimestamp + i;
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(topicPartition.topic(),
+                topicPartition.partition(),
+                timestamp,
+                ("key" + i).getBytes(),
+                ("value" + i).getBytes());
+            producer.send(record);
+            list.add(record);
+        }
+        producer.flush();
+        return list;
     }
 
     private void consumeAndVerifyRecords(Consumer<byte[], byte[]> consumer,
                                          int numberOfRecords,
                                          int startingOffset,
                                          int startingKeyAndValueIndex,
-                                         int startingTimestamp,
+                                         long startingTimestamp,
                                          TimestampType timestampType,
                                          TopicPartition topicPartition,
-                                         int maxPollRecords,
-                                         long timestampIncrement) throws InterruptedException {
+                                         int maxPollRecords) throws InterruptedException {
         List<ConsumerRecord<byte[], byte[]>> records = consumerRecords(consumer, numberOfRecords, maxPollRecords);
         long now = System.currentTimeMillis();
         for (int i = 0; i < numberOfRecords; i++) {
@@ -132,13 +150,10 @@ public class PlaintextConsumerPollTest {
             assertEquals(topicPartition.partition(), record.partition());
             if (TimestampType.CREATE_TIME == timestampType) {
                 assertEquals(timestampType, record.timestampType());
-                if (timestampIncrement > 0)
-                    assertEquals(startingTimestamp + i * timestampIncrement, record.timestamp());
-                else
-                    assertEquals(startingTimestamp + i, record.timestamp());
+                assertEquals(startingTimestamp + i, record.timestamp());
             } else {
                 assertTrue(record.timestamp() >= startingTimestamp && record.timestamp() <= now,
-                    "Got unexpected timestamp " + record.timestamp() + ". Timestamp should be between [" + startingTimestamp + ", " + now +"]");
+                    "Got unexpected timestamp " + record.timestamp() + ". Timestamp should be between [" + startingTimestamp + ", " + now + "]");
                 assertEquals(offset, record.offset());
                 int keyAndValueIndex = startingKeyAndValueIndex + i;
                 assertEquals("key" + keyAndValueIndex, new String(record.key()));
@@ -157,8 +172,9 @@ public class PlaintextConsumerPollTest {
             ConsumerRecords<byte[], byte[]> pollRecords = consumer.poll(Duration.ofMillis(100));
             assertTrue(pollRecords.count() <= maxPollRecords);
             pollRecords.forEach(records::add);
+            System.err.println(records.size());
             return records.size() >= numberOfRecords;
-        }, "");
+        }, 60000, "Timed out before consuming expected " + numberOfRecords + " records.");
         return records;
     }
 }
