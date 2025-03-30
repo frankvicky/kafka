@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Random;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
@@ -122,15 +123,22 @@ public class TestUtils {
         waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, conditionDetails);
     }
 
+    public static void waitForCondition(final Supplier<Boolean> testCondition,
+                                        final long maxWaitMs, 
+                                        String conditionDetails) throws InterruptedException {
+        waitForCondition(testCondition, maxWaitMs, conditionDetails, OptionalLong.empty());
+    }
+
     /**
      * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
      * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
      * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
      * avoid transient failures due to slow or overloaded machines.
      */
-    public static void waitForCondition(final Supplier<Boolean> testCondition, 
-                                        final long maxWaitMs, 
-                                        String conditionDetails) throws InterruptedException {
+    public static void waitForCondition(final Supplier<Boolean> testCondition,
+                                        final long maxWaitMs,
+                                        String conditionDetails,
+                                        OptionalLong pauseMs) throws InterruptedException {
         final long expectedEnd = System.currentTimeMillis() + maxWaitMs;
 
         while (true) {
@@ -149,7 +157,7 @@ public class TestUtils {
                     throw new AssertionError(format("Assertion failed with an exception after %s ms", maxWaitMs), e);
                 }
             }
-            Thread.sleep(Math.min(DEFAULT_POLL_INTERVAL_MS, maxWaitMs));
+            Thread.sleep(Math.min(pauseMs.orElse(DEFAULT_POLL_INTERVAL_MS), maxWaitMs));
         }
     }
 
