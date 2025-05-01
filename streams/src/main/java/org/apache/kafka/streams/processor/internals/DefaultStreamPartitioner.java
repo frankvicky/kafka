@@ -20,6 +20,7 @@ import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
@@ -42,7 +43,7 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
         if (keyBytes == null) {
             return Optional.empty();
         } else {
-            return Optional.of(Collections.singleton(BuiltInPartitioner.partitionForKey(keyBytes, numPartitions)));
+            return Optional.of(Collections.singleton(BuiltInPartitioner.partitionForKey(ByteBuffer.wrap(keyBytes), numPartitions)));
         }
     }
 }

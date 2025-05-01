@@ -83,6 +83,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -598,7 +599,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             final boolean enable2PC = config.getBoolean(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG);
             final int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
             final long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
-            
+
             transactionManager = new TransactionManager(
                 logContext,
                 transactionalId,
@@ -991,17 +992,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             nowMs += clusterAndWaitTime.waitedOnMetadataMs;
             long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
             Cluster cluster = clusterAndWaitTime.cluster;
-            byte[] serializedKey;
+            ByteBuffer serializedKey;
             try {
-                serializedKey = keySerializerPlugin.get().serialize(record.topic(), record.headers(), record.key());
+                serializedKey = keySerializerPlugin.get().serialize(record.topic(), record.key(), record.headers());
             } catch (ClassCastException cce) {
                 throw new SerializationException("Can't convert key of class " + record.key().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in key.serializer", cce);
             }
-            byte[] serializedValue;
+            ByteBuffer serializedValue;
             try {
-                serializedValue = valueSerializerPlugin.get().serialize(record.topic(), record.headers(), record.value());
+                serializedValue = valueSerializerPlugin.get().serialize(record.topic(), record.value(), record.headers());
             } catch (ClassCastException cce) {
                 throw new SerializationException("Can't convert value of class " + record.value().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
@@ -1460,7 +1461,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * can be used (the partition is then calculated by built-in
      * partitioning logic).
      */
-    private int partition(ProducerRecord<K, V> record, byte[] serializedKey, byte[] serializedValue, Cluster cluster) {
+    private int partition(ProducerRecord<K, V> record, ByteBuffer serializedKey, ByteBuffer serializedValue, Cluster cluster) {
         if (record.partition() != null)
             return record.partition();
 

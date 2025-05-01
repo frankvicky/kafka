@@ -411,8 +411,8 @@ public class SenderTest {
         int messagesPerBatch = 10;
         final AtomicInteger expiryCallbackCount = new AtomicInteger(0);
         final AtomicReference<Exception> unexpectedException = new AtomicReference<>();
-        final byte[] key = "key".getBytes();
-        final byte[] value = "value".getBytes();
+        final ByteBuffer key = ByteBuffer.wrap("key".getBytes());
+        final ByteBuffer value = ByteBuffer.wrap("value".getBytes());
         final long maxBlockTimeMs = 1000;
         MetadataSnapshot metadataCache = TestUtils.metadataSnapshotWith(1);
         RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
@@ -2421,9 +2421,9 @@ public class SenderTest {
             long nowMs = time.milliseconds();
             Cluster cluster = TestUtils.singletonCluster();
             Future<RecordMetadata> f1 =
-                    accumulator.append(tpId.topic(), tpId.partition(), 0L, "key1".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster).future;
+                    accumulator.append(tpId.topic(), tpId.partition(), 0L, ByteBuffer.wrap("key1".getBytes()), ByteBuffer.wrap(new byte[batchSize / 2]), null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster).future;
             Future<RecordMetadata> f2 =
-                    accumulator.append(tpId.topic(), tpId.partition(), 0L, "key2".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster).future;
+                    accumulator.append(tpId.topic(), tpId.partition(), 0L, ByteBuffer.wrap("key2".getBytes()), ByteBuffer.wrap(new byte[batchSize / 2]), null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster).future;
             sender.runOnce(); // connect
             sender.runOnce(); // send produce request
 
@@ -3593,7 +3593,7 @@ public class SenderTest {
     }
 
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp, long timestamp, String key, String value) throws InterruptedException {
-        return accumulator.append(tp.topic(), tp.partition(), timestamp, key.getBytes(), value.getBytes(), Record.EMPTY_HEADERS,
+        return accumulator.append(tp.topic(), tp.partition(), timestamp, ByteBuffer.wrap(key.getBytes()), ByteBuffer.wrap(value.getBytes()), Record.EMPTY_HEADERS,
                 null, MAX_BLOCK_TIMEOUT, time.milliseconds(), TestUtils.singletonCluster()).future;
     }
 

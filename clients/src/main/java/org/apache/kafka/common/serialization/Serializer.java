@@ -19,6 +19,7 @@ package org.apache.kafka.common.serialization;
 import org.apache.kafka.common.header.Headers;
 
 import java.io.Closeable;
+import java.nio.ByteBuffer;
 import java.util.Map;
 
 /**
@@ -91,5 +92,21 @@ public interface Serializer<T> extends Closeable {
     @Override
     default void close() {
         // intentionally left blank
+    }
+
+    /**
+     * Serializes the given data into a ByteBuffer.
+     *
+     * @param topic   the topic name associated with the data
+     * @param data    typed data; may be {@code null}
+     * @param headers the headers associated with the record
+     * @return a ByteBuffer containing the serialized data, ready for reading (position=0, limit set to the end of valid data).
+     * May return null if the data is null.
+     * Note: The returned ByteBuffer has already been flipped and is directly readable.
+     * Implementers should ensure the returned ByteBuffer is in a readable state.
+     */
+    default ByteBuffer serialize(String topic, T data, Headers headers) {
+        byte[] array = serialize(topic, headers, data);
+        return array == null ? null : ByteBuffer.wrap(array);
     }
 }

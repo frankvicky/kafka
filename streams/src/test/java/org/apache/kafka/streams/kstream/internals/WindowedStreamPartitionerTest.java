@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -68,7 +69,7 @@ public class WindowedStreamPartitionerTest {
 
             final String value = key.toString();
 
-            final Set<Integer> expected = Set.of(BuiltInPartitioner.partitionForKey(keyBytes, cluster.partitionsForTopic(topicName).size()));
+            final Set<Integer> expected = Set.of(BuiltInPartitioner.partitionForKey(ByteBuffer.wrap(keyBytes), cluster.partitionsForTopic(topicName).size()));
 
             for (int w = 1; w < 10; w++) {
                 final TimeWindow window = new TimeWindow(10 * w, 20 * w);

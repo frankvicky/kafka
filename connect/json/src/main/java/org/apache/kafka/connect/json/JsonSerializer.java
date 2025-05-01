@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.json;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,6 +26,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.module.blackbird.BlackbirdModule;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Set;
 
@@ -68,6 +70,19 @@ public class JsonSerializer implements Serializer<JsonNode> {
 
         try {
             return objectMapper.writeValueAsBytes(data);
+        } catch (Exception e) {
+            throw new SerializationException("Error serializing JSON message", e);
+        }
+    }
+
+    @Override
+    public ByteBuffer serialize(String topic, JsonNode data, Headers headers) {
+        if (data == null) {
+            return null;
+        }
+
+        try {
+            return ByteBuffer.wrap(objectMapper.writeValueAsBytes(data));
         } catch (Exception e) {
             throw new SerializationException("Error serializing JSON message", e);
         }

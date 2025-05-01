@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
@@ -122,6 +123,30 @@ public class ValueAndTimestampSerializer<V> implements WrappingNullableSerialize
             }
         }
         return true;
+    }
+
+    @Override
+    public ByteBuffer serialize(final String topic, final ValueAndTimestamp<V> data, final Headers headers) {
+        if (data == null) {
+            return null;
+        }
+        final byte[] rawValue = valueSerializer.serialize(topic, data.value());
+
+        // Since we can't control the result of the internal serializer, we make sure that the result
+        // is not null as well.
+        // Serializing non-null values to null can be useful when working with Optional-like values
+        // where the Optional.empty case is serialized to null.
+        // See the discussion here: https://github.com/apache/kafka/pull/7679
+        if (rawValue == null) {
+            return null;
+        }
+
+        final byte[] rawTimestamp = timestampSerializer.serialize(topic, data.timestamp());
+        return ByteBuffer
+            .allocate(rawTimestamp.length + rawValue.length)
+            .put(rawTimestamp)
+            .put(rawValue)
+            .flip();
     }
 
     @Override

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
@@ -65,6 +66,20 @@ public class TimestampedKeyAndJoinSideSerializer<K> implements WrappingNullableS
             .put(boolByte)
             .put(keyBytes)
             .array();
+    }
+
+    @Override
+    public ByteBuffer serialize(final String topic, final TimestampedKeyAndJoinSide<K> data, final Headers headers) {
+        final byte boolByte = (byte) (data.isLeftSide() ? 1 : 0);
+        final byte[] keyBytes = keySerializer.serialize(topic, data.key());
+        final byte[] timestampBytes = timestampSerializer.serialize(topic, data.timestamp());
+
+        return ByteBuffer
+            .allocate(timestampBytes.length + 1 + keyBytes.length)
+            .put(timestampBytes)
+            .put(boolByte)
+            .put(keyBytes)
+            .flip();
     }
 
     @Override

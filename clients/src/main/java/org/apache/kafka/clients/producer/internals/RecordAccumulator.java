@@ -275,8 +275,8 @@ public class RecordAccumulator {
     public RecordAppendResult append(String topic,
                                      int partition,
                                      long timestamp,
-                                     byte[] key,
-                                     byte[] value,
+                                     ByteBuffer key,
+                                     ByteBuffer value,
                                      Header[] headers,
                                      AppendCallbacks callbacks,
                                      long maxTimeToBlock,
@@ -376,8 +376,8 @@ public class RecordAccumulator {
                                               int partition,
                                               Deque<ProducerBatch> dq,
                                               long timestamp,
-                                              byte[] key,
-                                              byte[] value,
+                                              ByteBuffer key,
+                                              ByteBuffer value,
                                               Header[] headers,
                                               AppendCallbacks callbacks,
                                               ByteBuffer buffer,
@@ -422,7 +422,7 @@ public class RecordAccumulator {
      *  and memory records built) in one of the following cases (whichever comes first): right before send,
      *  if it is expired, or when the producer is closed.
      */
-    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
+    private RecordAppendResult tryAppend(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers,
                                          Callback callback, Deque<ProducerBatch> deque, long nowMs) {
         if (closed)
             throw new KafkaException("Producer closed while send in progress");

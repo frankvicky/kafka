@@ -143,6 +143,54 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
     }
 
     @Override
+    public ByteBuffer serialize(final String topic, final Change<T> data, final Headers headers) {
+        final boolean oldValueIsNotNull = data.oldValue != null;
+        final boolean newValueIsNotNull = data.newValue != null;
+
+        final byte[] newData = inner.serialize(topic, headers, data.newValue);
+        final byte[] oldData = inner.serialize(topic, headers, data.oldValue);
+
+        final int newDataLength = newValueIsNotNull ? newData.length : 0;
+        final int oldDataLength = oldValueIsNotNull ? oldData.length : 0;
+
+        // The serialization format is:
+        // {BYTE_ARRAY oldValue}{BYTE encodingFlag=0}
+        // {BYTE_ARRAY newValue}{BYTE encodingFlag=1}
+        // {VARINT newDataLength}{BYTE_ARRAY newValue}{BYTE_ARRAY oldValue}{BYTE encodingFlag=2}
+        if (newValueIsNotNull && oldValueIsNotNull) {
+            if (isUpgrade) {
+                throw new StreamsException("Both old and new values are not null (" + data.oldValue
+                        + " : " + data.newValue + ") in ChangeSerializer, which is not allowed unless upgrading.");
+            } else {
+                final int capacity = MAX_VARINT_LENGTH + newDataLength + oldDataLength + ENCODING_FLAG_SIZE;
+                final ByteBuffer buf = ByteBuffer.allocate(capacity);
+                ByteUtils.writeVarint(newDataLength, buf);
+                buf.put(newData).put(oldData).put((byte) 2);
+
+                final byte[] serialized = new byte[buf.position()];
+                buf.position(0);
+                buf.get(serialized);
+
+                return ByteBuffer.wrap(serialized);
+            }
+        } else if (newValueIsNotNull) {
+            final int capacity = newDataLength + ENCODING_FLAG_SIZE;
+            final ByteBuffer buf = ByteBuffer.allocate(capacity);
+            buf.put(newData).put((byte) 1);
+
+            return buf;
+        } else if (oldValueIsNotNull) {
+            final int capacity = oldDataLength + ENCODING_FLAG_SIZE;
+            final ByteBuffer buf = ByteBuffer.allocate(capacity);
+            buf.put(oldData).put((byte) 0);
+
+            return buf;
+        } else {
+            throw new StreamsException("Both old and new values are null in ChangeSerializer, which is not allowed.");
+        }
+    }
+
+    @Override
     public byte[] serialize(final String topic, final Change<T> data) {
         return serialize(topic, null, data);
     }

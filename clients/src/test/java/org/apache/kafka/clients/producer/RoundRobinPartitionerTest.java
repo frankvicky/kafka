@@ -22,6 +22,7 @@ import org.apache.kafka.common.PartitionInfo;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -55,7 +56,7 @@ public class RoundRobinPartitionerTest {
         Cluster cluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), partitions,
             Collections.emptySet(), Collections.emptySet());
         for (int i = 1; i <= 100; i++) {
-            int part = partitioner.partition("test", null, null, null, null, cluster);
+            int part = partitioner.partition("test", null, (ByteBuffer) null, (ByteBuffer) null, null, cluster);
             assertTrue(part == 0 || part == 2, "We should never choose a leader-less node in round robin");
             if (part == 0)
                 countForPart0++;

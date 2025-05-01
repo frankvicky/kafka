@@ -18,8 +18,10 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
+import java.nio.ByteBuffer;
 
 /**
  * Partitioner Interface
@@ -45,4 +47,8 @@ public interface Partitioner extends Configurable, Closeable {
      * This is called when partitioner is closed.
      */
     void close();
+
+    default int partition(String topic, Object key, ByteBuffer keyBytes, Object value, ByteBuffer valueBytes, Cluster cluster) {
+        return partition(topic, key, Utils.toNullableArray(keyBytes), value, Utils.toNullableArray(valueBytes), cluster);
+    }
 }

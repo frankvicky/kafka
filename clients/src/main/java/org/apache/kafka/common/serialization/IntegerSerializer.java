@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.header.Headers;
+
+import java.nio.ByteBuffer;
+
 public class IntegerSerializer implements Serializer<Integer> {
     public byte[] serialize(String topic, Integer data) {
         if (data == null)
@@ -27,5 +31,10 @@ public class IntegerSerializer implements Serializer<Integer> {
             (byte) (data >>> 8),
             data.byteValue()
         };
+    }
+
+    @Override
+    public ByteBuffer serialize(String topic, Integer data, Headers headers) {
+        return data == null ? null : ByteBuffer.allocate(4).putInt(data).flip();
     }
 }

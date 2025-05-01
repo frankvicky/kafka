@@ -112,6 +112,7 @@ import org.mockito.Mockito;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
 import java.lang.management.ManagementFactory;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -1103,9 +1104,9 @@ public class KafkaProducerTest {
         KafkaProducer<String, String> producer = kafkaProducer(configs, keySerializer, valueSerializer, metadata,
                 null, null, Time.SYSTEM);
 
-        when(keySerializer.serialize(any(), any(), any())).then(invocation ->
+        when(keySerializer.serialize(any(), (Headers) any(), any())).then(invocation ->
                 invocation.<String>getArgument(2).getBytes());
-        when(valueSerializer.serialize(any(), any(), any())).then(invocation ->
+        when(valueSerializer.serialize(any(), (Headers) any(), any())).then(invocation ->
                 invocation.<String>getArgument(2).getBytes());
 
         String value = "value";
@@ -2523,8 +2524,8 @@ public class KafkaProducerTest {
             eq(initialSelectedPartition.topic()),            // 0
             eq(initialSelectedPartition.partition()),        // 1
             eq(timestamp),                                   // 2
-            eq(serializedKey),                               // 3
-            eq(serializedValue),                             // 4
+            eq(ByteBuffer.wrap(serializedKey)),                               // 3
+            eq(ByteBuffer.wrap(serializedValue)),                             // 4
             eq(Record.EMPTY_HEADERS),                        // 5
             any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
             anyLong(),

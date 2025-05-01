@@ -762,7 +762,7 @@ public class TransactionManagerTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         Future<RecordMetadata> responseFuture1 = accumulator.append(tp0.topic(), tp0.partition(), time.milliseconds(),
-                "1".getBytes(), "1".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, time.milliseconds(),
+                ByteBuffer.wrap("1".getBytes()), ByteBuffer.wrap("1".getBytes()), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, time.milliseconds(),
                 TestUtils.singletonCluster()).future;
         sender.runOnce();
         assertEquals(1, transactionManager.sequenceNumber(tp0));
@@ -793,7 +793,7 @@ public class TransactionManagerTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         Future<RecordMetadata> responseFuture2 = accumulator.append(tp0.topic(), tp0.partition(), time.milliseconds(),
-                "2".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, time.milliseconds(),
+                ByteBuffer.wrap("2".getBytes()), ByteBuffer.wrap("2".getBytes()), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, time.milliseconds(),
                 TestUtils.singletonCluster()).future;
         sender.runOnce();
         sender.runOnce();
@@ -839,7 +839,7 @@ public class TransactionManagerTest {
                 Compression.NONE, TimestampType.CREATE_TIME, 0L);
         long currentTimeMs = time.milliseconds();
         ProducerBatch batch = new ProducerBatch(tp, builder, currentTimeMs);
-        batch.tryAppend(currentTimeMs, new byte[0], value.getBytes(), new Header[0], null, currentTimeMs);
+        batch.tryAppend(currentTimeMs, ByteBuffer.wrap(new byte[0]), ByteBuffer.wrap(value.getBytes()), new Header[0], null, currentTimeMs);
         return batch;
     }
 
@@ -3987,7 +3987,7 @@ public class TransactionManagerTest {
 
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
         final long nowMs = time.milliseconds();
-        return accumulator.append(tp.topic(), tp.partition(), nowMs, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS,
+        return accumulator.append(tp.topic(), tp.partition(), nowMs, ByteBuffer.wrap("key".getBytes()), ByteBuffer.wrap("value".getBytes()), Record.EMPTY_HEADERS,
                 null, MAX_BLOCK_TIMEOUT, nowMs, TestUtils.singletonCluster()).future;
     }
 

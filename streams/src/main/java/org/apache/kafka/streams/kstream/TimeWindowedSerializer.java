@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.state.internals.WindowKeySchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.util.Map;
 
 public class TimeWindowedSerializer<T> implements WindowedSerializer<T> {
@@ -95,6 +97,11 @@ public class TimeWindowedSerializer<T> implements WindowedSerializer<T> {
         }
 
         return WindowKeySchema.toBinary(data, inner, topic);
+    }
+
+    @Override
+    public ByteBuffer serialize(final String topic, final Windowed<T> data, final Headers headers) {
+        return ByteBuffer.wrap(serialize(topic, data));
     }
 
     @Override

@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.header.Headers;
+
+import java.nio.ByteBuffer;
+
 public class BooleanSerializer implements Serializer<Boolean> {
 
     private static final byte TRUE = 0x01;
@@ -29,5 +33,11 @@ public class BooleanSerializer implements Serializer<Boolean> {
         return new byte[] {
             data ? TRUE : FALSE
         };
+    }
+
+    @Override
+    public ByteBuffer serialize(String topic, Boolean data, Headers headers) {
+        return data == null ? null
+                : ByteBuffer.allocate(1) .put(data ? TRUE : FALSE) .flip();
     }
 }

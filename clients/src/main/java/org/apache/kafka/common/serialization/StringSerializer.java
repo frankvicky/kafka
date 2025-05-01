@@ -17,7 +17,9 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
@@ -53,5 +55,10 @@ public class StringSerializer implements Serializer<String> {
             return null;
         else
             return data.getBytes(encoding);
+    }
+
+    @Override
+    public ByteBuffer serialize(String topic, String data, Headers headers) {
+        return data == null ? null : ByteBuffer.wrap(data.getBytes(encoding));
     }
 }

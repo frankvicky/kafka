@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.header.Headers;
+
+import java.nio.ByteBuffer;
+
 public class FloatSerializer implements Serializer<Float> {
     @Override
     public byte[] serialize(final String topic, final Float data) {
@@ -29,5 +33,10 @@ public class FloatSerializer implements Serializer<Float> {
             (byte) (bits >>> 8),
             (byte) bits
         };
+    }
+
+    @Override
+    public ByteBuffer serialize(String topic, Float data, Headers headers) {
+        return data == null ? null : ByteBuffer.allocate(4).putFloat(data).flip();
     }
 }

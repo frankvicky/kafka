@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
@@ -324,10 +325,28 @@ public class BuiltInPartitioner {
     }
 
     /*
-     * Default hashing function to choose a partition from the serialized key bytes
+     * Default hashing function to choose a partition from the serialized key bytes in ByteBuffer
      */
-    public static int partitionForKey(final byte[] serializedKey, final int numPartitions) {
-        return Utils.toPositive(Utils.murmur2(serializedKey)) % numPartitions;
+    public static int partitionForKey(final ByteBuffer serializedKey, final int numPartitions) {
+        if (serializedKey == null)
+            return 0;
+
+        if (serializedKey.hasArray()) {
+            byte[] array = serializedKey.array();
+            int offset = serializedKey.arrayOffset() + serializedKey.position();
+            int length = serializedKey.remaining();
+            if (offset == 0 && length == array.length) {
+                return Utils.toPositive(Utils.murmur2(array)) % numPartitions;
+            }
+        }
+
+        // If we can't use the array directly, fall through to the copy approach
+        // We need to copy the data from the ByteBuffer to a byte array
+        byte[] bytes = new byte[serializedKey.remaining()];
+        // Create a duplicate so we don't modify the original buffer's position
+        ByteBuffer duplicate = serializedKey.duplicate();
+        duplicate.get(bytes);
+        return Utils.toPositive(Utils.murmur2(bytes)) % numPartitions;
     }
 
     /**
